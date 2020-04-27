@@ -91,7 +91,7 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
-  retval = argc>1 ? sscanf(argv[2], "%ld.%ld.%ld.%ld:%ld", input_sendipaddress+0, input_sendipaddress+1, input_sendipaddress+2, input_sendipaddress+3, &input_sendport) : -1;
+  retval = argc>2 ? sscanf(argv[2], "%ld.%ld.%ld.%ld:%ld", input_sendipaddress+0, input_sendipaddress+1, input_sendipaddress+2, input_sendipaddress+3, &input_sendport) : -1;
 
   if (retval != 5) {
     fprintf(stderr, "%s: Trouble with IP:PORT to send to.\n", __FUNCTION__);

@@ -24,6 +24,11 @@ critcache-client : LIBS=-lcritcache
 critcache-client : critbit.o critcache-client.o libcritcache.a
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(LIBS)
 
+gen_stressclient : LIBS=-lcritcache
+
+gen_stressclient : critbit.o gen_stressclient.o libcritcache.a
+	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(LIBS)
+
 .PHONY:
 clean:
 	-rm *.o libcritcache.a critcache-server critcache-client

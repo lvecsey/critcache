@@ -16,4 +16,11 @@ critcache-client 192.168.2.14:5250 192.168.2.14:7375 del bbcb9199-eefc-4b2f-9f76
 
 The client program will actually try to bind to the specified port, and up to 10 ports above it to find an open port. You can also edit test.env and use ./run_tests.sh
 
+You can also run a stress test to the server:
+
+make gen_stresstest
+./gen_stresstest 192.168.2.14:5250 192.168.2.14:7375 1000000
+
+And you should get a total elapsed time, and average time of send/recv.
+
 The included critbit code is from https://github.com/agl/critbit
