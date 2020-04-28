@@ -30,6 +30,9 @@
 #include <sys/socket.h>
 #include <netdb.h>
 
+#include <signal.h>
+#include <time.h>
+
 #include "critbit.h"
 
 #include "critcache.h"
@@ -96,7 +99,102 @@ int sendresult(int s, char *buf, struct sockaddr_in *dest_addr, ccpkt_unpacked *
  return 0;
 
 }
+
+critbit0_tree cb = { .root = NULL };
+
+int dump_records(const char *str, void *extra) {
+
+  int *fd;
+
+  fd = (int*) extra;
+
+  {
+
+    ssize_t bytes_read;
+
+    size_t len;
+
+    len = strlen(str);
+    
+    bytes_read = write(fd[0], str, len);
+    if (bytes_read != len) {
+      perror("write");
+      return 0;
+    }
+
+    bytes_read = write(fd[0], "\n", 1);
+    if (bytes_read != 1) {
+      perror("write");
+      return 0;
+    }
+    
+  }
   
+  return 1;
+
+}
+
+#define critdump_fn "./critdump/critcache_serverdump.txt"
+
+int critdump_file(critbit0_tree *ct, char *out_fn) {
+
+  char tmpout_fn[240];
+
+  int fd;
+
+  mode_t mode;
+  
+  int retval;
+  
+  retval = sprintf(tmpout_fn, "%s.new", out_fn);
+
+  mode =  S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
+  fd = open("./critdump/critcache_serverdump.txt.new", O_RDWR | O_CREAT | O_TRUNC, mode);
+
+  if (fd == -1) {
+    perror("open");
+    return -1;
+  }
+  
+  retval = critbit0_allprefixed(&cb, "", dump_records, &fd);
+
+  retval = close(fd);
+  if (retval == -1) {
+    perror("close");
+    return -1;
+  }
+  
+  retval = rename(tmpout_fn, out_fn);
+
+  if (retval == -1) {
+    perror("rename");
+    return -1;
+  }
+  
+  return 0;
+  
+}
+
+void signal_handler(int x, siginfo_t *info, void *extra) {
+
+  ucontext_t *uc;
+
+  int retval;
+
+  fprintf(stderr, "%s: Entered signal handler.\n", __FUNCTION__);
+
+  uc = (ucontext_t*) extra;
+
+  retval = critdump_file(&cb, critdump_fn);
+  if (retval == -1) {
+    fprintf(stderr, "%s: Trouble dumping critbit tree to a file.\n", __FUNCTION__);
+    return;
+  }  
+  
+  return;
+
+}
+
 int main(int argc, char *argv[]) {
 
   int retval;
@@ -125,8 +223,16 @@ int main(int argc, char *argv[]) {
 
   ccpktcmd_hdr *cmdhdr;
 
-  critbit0_tree cb = { .root = NULL };
+  struct sigaction act;
 
+  struct sigaction oldact;
+
+  struct timespec start, now;
+
+  struct timespec last_critdump;
+  
+  double elapsed;
+  
   long int counter;
   
   retval = argc>1 ? sscanf(argv[1], "%ld.%ld.%ld.%ld:%ld", input_ipaddress+0, input_ipaddress+1, input_ipaddress+2, input_ipaddress+3, &input_port) : -1;
@@ -165,15 +271,53 @@ int main(int argc, char *argv[]) {
 
   cmdhdr = & (pkt_unpacked.cmdhdr);
 
-  // cb = (critbit0_tree) { .root = NULL };
+  memset(&act, 0, sizeof(act));
+  act.sa_sigaction = signal_handler;
+  act.sa_flags = SA_SIGINFO;
+  sigaddset(&act.sa_mask, SIGUSR1);
 
+  retval = sigaction(SIGUSR1, &act, &oldact);
+  if (retval==-1) {
+    perror("sigaction");
+    return -1;
+  }
+  
   counter = 0;
+
+  retval = clock_gettime(CLOCK_REALTIME, &start);
+  if (retval == -1) {
+    perror("clock_gettime");
+    return -1;
+  }
+  
+  last_critdump = start;
   
   for (;;) {
+
+    retval = clock_gettime(CLOCK_REALTIME, &now);
+    if (retval == -1) {
+      perror("clock_gettime");
+      return -1;
+    }
+
+    elapsed = (now.tv_sec - last_critdump.tv_sec);
+
+    if (elapsed > 30) {
+
+      retval = critdump_file(&cb, critdump_fn);
+      if (retval == -1) {
+	fprintf(stderr, "%s: Trouble dumping critbit tree to a file.\n", __FUNCTION__);
+	return -1;
+      }  
+      
+      last_critdump = now;
+      
+    }
+    
     len = sizeof(buf);
     addrlen = sizeof(struct sockaddr_in);
     bytes_read = recvfrom(s, buf, len, flags, (struct sockaddr*) &dest_addr, &addrlen); 
-
+    
     counter++;
     
     if (bytes_read >= cc_minpktlen) {
