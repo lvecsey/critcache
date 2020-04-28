@@ -11,7 +11,7 @@ critbit.o : CFLAGS+=-std=c99
 
 critcache.o : critcache.h
 
-libcritcache.a : critcache.o
+libcritcache.a : critcache.o cceasy.o
 	ar r $@ $^
 
 critcache-server : LIBS=-lcritcache
